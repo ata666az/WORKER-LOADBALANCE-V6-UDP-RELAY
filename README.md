@@ -99,8 +99,8 @@ Cloudflare Worker performa tinggi dengan **Smart Load Balancing** ke ratusan end
 ### 1. Clone Repo Ini
 
 ```bash
-git clone https://github.com/[GANTI: USERNAME]/[GANTI: REPO].git
-cd [GANTI: REPO]
+git clone https://github.com/ata666az/WORKER-LOADBALANCE-V6-UDP-RELAY.git
+cd WORKER-LOADBALANCE-V6-UDP-RELAY
 ```
 
 ### 2. Deploy ke Cloudflare Workers
