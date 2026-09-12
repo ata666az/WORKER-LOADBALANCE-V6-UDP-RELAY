@@ -8,6 +8,9 @@ Cloudflare Worker performa tinggi dengan **Smart Load Balancing** ke ratusan end
 
 > **TL;DR** — Worker ini menerima request HTTP → memilih endpoint terbaik secara dinamis (EWMA latency, success rate, jitter, P95 timeout) → meneruskan request paralel ke beberapa worker teratas dengan strategi *hedging*. Selain itu, tersedia endpoint `/udp` untuk tunnel UDP melalui WebSocket.
 
+> 📦 **Relay server Railway** (yang menerjemahkan WebSocket → UDP) tersedia di repo terpisah:  
+> 👉 **[github.com/ata666az/Relay-Railway](https://github.com/ata666az/Relay-Railway)**
+
 ---
 
 ## 📑 Daftar Isi
@@ -54,6 +57,9 @@ Cloudflare Worker performa tinggi dengan **Smart Load Balancing** ke ratusan end
 | **IPv4 & IPv6** | Auto-detect family berdasarkan host |
 | **Idle Timeout** | Koneksi nganggur >2 menit ditutup otomatis |
 
+> 💡 **Butuh server relay-nya?** Kode lengkap server Railway (Node.js + `ws` + `dgram`) ada di:  
+> 🔗 **[https://github.com/ata666az/Relay-Railway](https://github.com/ata666az/Relay-Railway)**
+
 ---
 
 ## 📦 Arsitektur
@@ -69,6 +75,10 @@ Cloudflare Worker performa tinggi dengan **Smart Load Balancing** ke ratusan end
 │  Client  │ ───────────► │  (tunnel)       │   (?target=...)      │ Relay            │
 │  (UDP)   │              │                 │                      │  ⇄ UDP socket    │
 └──────────┘              └─────────────────┘                      └──────────────────┘
+                                                                        ▲
+                                                                        │
+                                                    Repo terpisah:      │
+                                        github.com/ata666az/Relay-Railway
 ```
 
 **Alur Load Balancing:**
@@ -86,7 +96,7 @@ Cloudflare Worker performa tinggi dengan **Smart Load Balancing** ke ratusan end
 
 ## 🚀 Cara Deploy
 
-### 1. Clone Repo
+### 1. Clone Repo Ini
 
 ```bash
 git clone https://github.com/[GANTI: USERNAME]/[GANTI: REPO].git
@@ -110,11 +120,25 @@ wrangler login
 wrangler deploy worker.js --name [GANTI: NAMA-WORKER]
 ```
 
-### 3. Setup UDP Relay di Railway (opsional)
+### 3. Setup UDP Relay di Railway
 
 UDP relay butuh server terpisah di Railway karena Cloudflare Workers **tidak bisa** raw UDP socket.
 
-📖 Panduan lengkap: lihat repo [`udp-relay-railway`]([GANTI: URL REPO RELAY ANDA])
+> 📖 **Panduan lengkap ada di repo terpisah:**
+> 👉 **[https://github.com/ata666az/Relay-Railway](https://github.com/ata666az/Relay-Railway)**
+>
+> Repo tersebut berisi:
+> - `server.js` — Server WebSocket ⇄ UDP bridge
+> - `package.json` — Dependency (`ws`)
+> - `railway.json` — Konfigurasi deploy Railway
+> - `README.md` — Panduan deploy step-by-step
+
+**Ringkasan langkah:**
+
+1. Clone repo relay: `git clone https://github.com/ata666az/Relay-Railway.git`
+2. Deploy ke Railway via GitHub integration
+3. Generate domain publik di Railway: **Settings** → **Networking** → **Generate Domain**
+4. Set environment variable `RELAY_SECRET` (opsional, untuk auth)
 
 Setelah relay deploy, update di `worker.js`:
 
@@ -159,6 +183,8 @@ const UDP_RELAY_URL    = 'wss://[GANTI: DOMAIN-RAILWAY].up.railway.app/udp';
 const UDP_RELAY_PATH   = '/udp';
 const UDP_RELAY_SECRET = ''; // kosongkan untuk tanpa auth
 ```
+
+> 💡 Nilai `UDP_RELAY_URL` harus cocok dengan domain publik server relay di repo **[Relay-Railway](https://github.com/ata666az/Relay-Railway)**.
 
 ### Menambah Worker Endpoint
 
@@ -251,7 +277,7 @@ wscat -c "wss://[GANTI: NAMA-WORKER].workers.dev/udp?target=1.1.1.1:53" \
 |---|---|
 | **401 Unauthorized** saat akses `/udp` | `UDP_RELAY_SECRET` di worker tidak kosong tapi client tidak kirim header `X-Relay-Secret`. Kirim header, atau kosongkan secret. |
 | **426 Upgrade Required** | Akses `/udp` via HTTP biasa. Harus WebSocket. |
-| **1011 Relay unavailable** | Worker gagal konek ke Railway. Cek `UDP_RELAY_URL` benar & relay hidup. |
+| **1011 Relay unavailable** | Worker gagal konek ke Railway. Cek `UDP_RELAY_URL` benar & relay hidup. Pastikan relay dari repo [Relay-Railway](https://github.com/ata666az/Relay-Railway) sudah dideploy. |
 | **1008 Unauthorized (dari Railway)** | `RELAY_SECRET` di Railway ≠ `X-Relay-Secret` yang dikirim Worker. |
 | **502/503 dari proxy** | Semua worker sedang cooldown. Tunggu ±60 detik atau tambahkan endpoint baru. |
 | **Response lambat** | Kemungkinan banyak worker down. Cek statistik & kurangi endpoint mati. |
@@ -272,6 +298,9 @@ wscat -c "wss://[GANTI: NAMA-WORKER].workers.dev/udp?target=1.1.1.1:53"
 # 3. Tes end-to-end kirim DNS query
 # Lihat bagian "Cara Pakai → UDP Relay → Dari Browser"
 ```
+
+> 🛠️ **Relay server bermasalah?** Buka issue di repo relay:  
+> 👉 **[github.com/ata666az/Relay-Railway/issues](https://github.com/ata666az/Relay-Railway/issues)**
 
 ### Cek via DevTools Console
 
@@ -295,7 +324,7 @@ setTimeout(() => ws.close(), 3000);
 
 ## ⚠️ Batasan & Catatan Penting
 
-1. **Cloudflare Workers tidak bisa raw UDP socket.** Relay UDP harus melalui WebSocket + server perantara (Railway).
+1. **Cloudflare Workers tidak bisa raw UDP socket.** Relay UDP harus melalui WebSocket + server perantara (Railway). Kode relay: **[Relay-Railway](https://github.com/ata666az/Relay-Railway)**.
 2. **`*.railway.internal` tidak bisa diakses dari Cloudflare.** Gunakan domain publik yang di-generate Railway (Settings → Networking → Generate Domain).
 3. **Twilio TURN Connectivity Test** tidak akan pernah sukses lewat proxy WebSocket — tes ini menguji jalur UDP langsung dari browser ke server TURN Twilio.
 4. **Cache API bersifat per-datacenter.** Statistik worker tidak sinkron antar region Cloudflare. Setiap PoP punya stats sendiri.
@@ -316,7 +345,18 @@ setTimeout(() => ws.close(), 3000);
 └── .dev.vars        # (opsional) environment untuk dev lokal — JANGAN commit
 ```
 
-> **Relay server Railway** disimpan di repo terpisah. Lihat [udp-relay-railway]([GANTI: URL REPO RELAY]).
+> **Relay server Railway** disimpan di repo terpisah:  
+> 👉 **[https://github.com/ata666az/Relay-Railway](https://github.com/ata666az/Relay-Railway)**
+>
+> Repo tersebut berisi:
+> ```
+> Relay-Railway/
+> ├── server.js       # WebSocket ⇄ UDP bridge (Node.js + ws + dgram)
+> ├── package.json    # Dependency
+> ├── railway.json    # Konfigurasi deploy Railway
+> ├── .env.example    # Contoh environment variable
+> └── README.md       # Panduan deploy relay
+> ```
 
 ### `.gitignore` yang disarankan
 
@@ -355,6 +395,29 @@ curl http://localhost:8787/
 
 # Test UDP relay
 wscat -c "ws://localhost:8787/udp?target=1.1.1.1:53"
+```
+
+### Menjalankan Relay Railway Secara Lokal (untuk development)
+
+Kalau Anda ingin test relay di lokal sebelum deploy:
+
+```bash
+# Clone repo relay
+git clone https://github.com/ata666az/Relay-Railway.git
+cd Relay-Railway
+
+# Install dependency
+npm install
+
+# Jalankan
+npm start
+# Server jalan di http://localhost:8080
+```
+
+Lalu di `worker.js` (khusus dev), ganti:
+
+```js
+const UDP_RELAY_URL = 'ws://localhost:8080/udp';
 ```
 
 ---
@@ -420,8 +483,8 @@ Contoh output:
 # Stream logs dari Cloudflare
 wrangler tail [GANTI: NAMA-WORKER]
 
-# Logs Railway (untuk relay)
-# Buka dashboard Railway → service relay → tab "Deployments" → klik deployment → "View Logs"
+# Logs Railway (untuk relay) — buka dashboard Railway:
+# Service relay → Deployments → klik deployment → "View Logs"
 ```
 
 ---
@@ -442,6 +505,11 @@ Pull request diterima! Untuk perubahan besar, buka issue dulu untuk diskusi.
 - Jangan tambahkan dependency eksternal — Workers runtime terbatas
 - Test di `wrangler dev` sebelum push
 - Update README jika menambah fitur/konfigurasi baru
+
+### 🐛 Untuk masalah pada relay Railway
+
+Buka issue di repo relay langsung:  
+👉 **[github.com/ata666az/Relay-Railway/issues](https://github.com/ata666az/Relay-Railway/issues)**
 
 ---
 
@@ -477,7 +545,6 @@ SOFTWARE.
 
 - Dibuat dengan ❤️ untuk komunitas Cloudflare Workers Indonesia
 - Powered by [Cloudflare Workers](https://workers.cloudflare.com/) + [Railway](https://railway.app/)
-- Teknik load balancing terinspirasi dari [Envoy](https://www.envoyproxy.io/) & [HAProxy](https://www.haproxy.org/)
 
 ---
 
