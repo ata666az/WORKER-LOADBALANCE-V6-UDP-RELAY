@@ -28,7 +28,7 @@ const LATENCY_HISTORY_SIZE = 30;
 
 // ==================== UDP RELAY CONFIG ====================
 // HARUS domain PUBLIK Railway (bukan *.railway.internal)
-const UDP_RELAY_URL    = 'wss://relay-railway-production-286e.up.railway.app/udp';
+const UDP_RELAY_URL    = 'wsudprelay-production-7524.up.railway.app';
 const UDP_RELAY_PATH   = '/udp';
 const UDP_RELAY_SECRET = ''; // isi kalau relay pakai auth
 
